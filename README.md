@@ -1,55 +1,57 @@
+[🇷🇺 Читать на русском](README_RU.md)
 # prefixopt
 
-## Описание
+## Description
 
-`prefixopt` - это инструмент для сетевых инженеров и специалистов по безопасности. Он позволяет автоматизировать рутинные задачи по обработке списков IP-адресов: удаление дубликатов, агрегацию подсетей, фильтрацию мусора (Bogons), поиск пересечений, симантическое сравнение списков, а также иключение одного или больше подсетей/адресов из списка.
+`prefixopt` is a tool for network engineers and security specialists. It allows automating routine tasks for processing IP address lists: removing duplicates, aggregating subnets, filtering garbage (Bogons), finding intersections, semantically comparing lists, as well as excluding one or more subnets/addresses from a list.
 
-Позволяет привести в порядок разрозненные списки IP-адресов:
-- Оптимизация: Автоматическое удаление дубликатов и вложенных сетей (например, удаление /32, если есть покрывающая /24).
-- Агрегация: Объединение смежных подсетей в суперсети (CIDR summarization).
-- Фильтрация: Очистка списков от Bogons, частных сетей (RFC1918), Loopback и Multicast.
-- Вычитание (Exclude): Исключение конкретных адресов или подсетей из общего списка с автоматическим разбиением диапазонов.
-- Сравнение (Diff): Семантическое сравнение двух списков (показывает, какие подсети были добавлены или удалены).
-- Всеядность: Парсер автоматически извлекает префиксы из любых текстовых файлов (логи, конфигурации оборудования, CSV, JSON).
+Allows organizing scattered lists of IP addresses:
+- Optimization: Automatic removal of duplicates and nested networks (e.g., removing /32 if a covering /24 exists).
+- Aggregation: Merging adjacent subnets into supernet.
+- Filtering: Cleaning lists from Bogons, private networks (RFC1918), Loopback, and Multicast.
+- Subtraction: Excluding specific addresses or subnets from the general list with automatic range splitting.
+- Comparison: Semantic comparison of two lists (shows which subnets were added or removed).
+- Versatility: The parser automatically extracts prefixes from any text files (logs, equipment configurations, CSV, JSON).
 
 ---
 
-## Установка
+## Installation
 
-Требуется Python 3.9 или выше.
+Requires Python 3.9 or higher.
 
 ```bash
-# Клонирование репозитория
+# Clone the repository
 git clone https://github.com/ReuxM13/prefixopt.git
 cd prefixopt
 
-# Создание и активация виртуального окружения (опционально)
+# Create and activate virtual environment (optional)
 python -m venv venv
 
-# Активация venv
+# Activate venv
 .\venv\Scripts\activate # Windows
 source venv/bin/activate # Linux
 
-# Установка в режиме разработки (рекомендуется)
+# Install in editable mode (recommended)
 pip install -e .
 ```
 
 ---
 
-## Техническая реализация
+## Technical Implementation
+The architecture is built on a modular principle (Core / CLI / Data).
 
-Архитектура построена на модульном принципе (Core / CLI / Data).
+- Performance: Linear complexity O(N) algorithms are used for nested removal and aggregation (stack-based), which allows processing part (up to 10 million lines) of the BGP Full View table in a few minutes.
+- Memory: Data reading and filtering are implemented via generators to minimize RAM consumption.
+- Safety: Inside the pipeline, work is done only with IPv4Network/IPv6Network objects; string operations are excluded. Hard limits on input data size are implemented to prevent OOM.
 
-- Производительность: Используются алгоритмы линейной сложности O(N) для удаления вложенности и агрегации (на базе стека), что позволяет обрабатывать часть (до 10 млн строк) BGP Full View таблицы за несколько минут.
-- Память: Чтение и фильтрация данных реализованы через генераторы (Lazy Evaluation) для минимизации потребления RAM.
-- Безопасность: Внутри пайплайна работа идет только с объектами IPv4Network/IPv6Network, строковые операции исключены. Реализованы жесткие лимиты (Hard Limits) на размер входных данных для предотвращения OOM.
+### Limitations
+- Memory Overhead: The utility is written in pure Python. Due to overhead on ipaddress objects, processing lists larger than 8-10 million lines may require significant RAM (starting from 8-10GB).
+- JSON: JSON parsing is not streaming - the file is loaded into memory entirely.
+- Big Data: The tool is not designed for real-time big data processing. It is a utility for configurations and access lists, not for traffic analytics.
 
-### Ограничения
-- Memory Overhead: Утилита написана на чистом Python. Из-за накладных расходов на объекты ipaddress, обработка списков объемом более 8-10 млн строк может требовать значительного объема RAM (от 8-10ГБ).
-- JSON: Парсинг JSON-файлов не является потоковым - файл загружается в память целиком.
-- Big Data: Инструмент не предназначен для обработки больших данных в реальном времени. Это утилита для конфигураций и списков доступа, а не для аналитики трафика.
+---
 
-## Лицензия
-Этот проект распространяется под лицензией *MIT License*. См. файл `LICENSE` для подробностей.
+## License
+This project is distributed under the *MIT License*. See the `LICENSE` file for details.
 
 ![Tests](https://github.com/ReuxM13/prefixopt/actions/workflows/tests.yml/badge.svg)
