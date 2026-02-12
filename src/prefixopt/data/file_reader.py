@@ -16,14 +16,11 @@ from typing import List, Union, Generator, Iterator, Tuple
 from ipaddress import IPv4Network, IPv6Network
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, TaskID
 
-# --- Лимиты ---
 # Ограничения для защиты от Out Of Memory
 MAX_FILE_SIZE_MB = 700
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 MAX_LINE_COUNT = 8_000_000
 
-
-# --- Парсинг ---
 
 def parse_ipv4(text: str) -> List[str]:
     """

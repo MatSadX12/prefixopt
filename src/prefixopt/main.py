@@ -1,4 +1,4 @@
-"""Основной модуль CLI для prefixOptimizer"""
+"""Основной модуль CLI для prefixopt"""
 import typer
 import os
 import sys
