@@ -41,7 +41,7 @@ pip install -e .
 
 ## Usage
 
-<p align="center">
+<p align="left">
   <img src="Using.png" alt="prefixopt using" width="100%">
 </p>
 

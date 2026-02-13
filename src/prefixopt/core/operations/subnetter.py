@@ -5,15 +5,29 @@ from ipaddress import IPv4Network, IPv6Network
 
 def split_network(network: Union[IPv4Network, IPv6Network], target_length: int, max_subnets: int = 500000) -> List[Union[IPv4Network, IPv6Network]]:
     """
-    Splits the network into subnets with a specified prefix length.
+    Excludes the specified networks from the input list.
+
+    Команда принимает на вход цель для исключения и исходный файл.
+    Если исключаемая сеть перекрывается с сетями из списка, исходные сети
+    будут разбиты на фрагменты или удалены, чтобы исключить указанный диапазон.
+
+    Target может быть:
+    1. Одиночным префиксом (например, "192.168.1.1/32").
+    2. Путем к файлу, содержащему список префиксов для исключения (Blacklist).
+
+    После исключения автоматически выполняется полный цикл оптимизации
+    (сортировка, удаление вложенных, агрегация) для полученного результата.
 
     Args:
-        network: Сеть для разбиения
-        target_length: Целевая длина префикса (например, 24 для /24)
-        max_subnets: Максимальное количество подсетей для предотвращения переполнения
+        target: Строка с префиксом или путь к файлу с исключениями.
+        input_file: Путь к исходному файлу.
+        output_file: Путь к файлу для сохранения результата.
+        ipv6_only: Обрабатывать только IPv6.
+        ipv4_only: Обрабатывать только IPv4.
+        format: Формат вывода.
 
-    Returns:
-        Список подсетей
+    Raises:
+        SystemExit: Если target не является ни валидным префиксом, ни файлом.
     """
     if target_length < network.prefixlen:
         raise ValueError(f"Target prefix length ({target_length}) must be greater than or equal to "
