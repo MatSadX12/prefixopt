@@ -33,15 +33,23 @@ def merge(
     """
     Combines two files with IP prefixes.
 
-    По умолчанию выполняет полную оптимизацию (сортировка, удаление вложенных, агрегация).
-    Результат всегда отсортирован.
+    Команда поддерживает два режима работы:
+    1. Стандартный (Оптимизация): Списки загружаются, объединяются, сортируются,
+       очищаются от вложенностей и агрегируются.
+    2. Режим --keep-comments: Используется для слияния списков "белого доступа"
+       или конфигов с комментариями.
+       - Агрегация и удаление вложенных сетей ОТКЛЮЧАЮТСЯ (чтобы не потерять
+         привязку комментария к конкретной подсети).
+       - Выполняется дедупликация (удаление полных дублей IP).
+       - Используется потоковая обработка для экономии памяти (данные льются
+         напрямую в словарь дедупликации, минуя создание промежуточных списков).
 
     Args:
         file1: Путь к первому файлу.
         file2: Путь ко второму файлу.
         output_file: Файл для сохранения результата.
-        format: Формат вывода (List/CSV).
-        keep_comments: Режим сохранения комментариев. Отключает агрегацию.
+        format: Формат вывода.
+        keep_comments: Включить режим сохранения комментариев.
 
     Raises:
         SystemExit: При ошибках ввода-вывода или несовместимых аргументах.
@@ -53,22 +61,24 @@ def merge(
             sys.exit(1)
 
         if keep_comments:
-            # Читаем данные как кортежи (IP объект, Комментарий)
-            data1 = read_prefixes_with_comments(file1)
-            data2 = read_prefixes_with_comments(file2)
-            all_data = data1 + data2
+            unique_map = {}
             
-            # Дедупликация с сохранением комментариев.
-            # Приоритет отдается записи с непустым комментарием.
-            unique_map: Dict[str, str] = {}
-            for ip, comment in all_data:
-                ip_str = str(ip)
-                if ip_str not in unique_map:
-                    unique_map[ip_str] = comment
-                else:
-                    # Если у существующего нет коммента, а у нового есть - обновляем
-                    if not unique_map[ip_str] and comment:
+            # Вспомогательная функция для обработки потока
+            def process_stream(stream):
+                for ip, comment in stream:
+                    ip_str = str(ip)
+                    if ip_str not in unique_map:
                         unique_map[ip_str] = comment
+                    else:
+                        # Если у существующего нет коммента, а у нового есть - обновляем
+                        if not unique_map[ip_str] and comment:
+                            unique_map[ip_str] = comment
+
+            # 1. Читаем первый файл прямо в словарь
+            process_stream(read_prefixes_with_comments(file1))
+            
+            # 2. Читаем второй файл прямо в словарь (добавляем/обновляем)
+            process_stream(read_prefixes_with_comments(file2))
 
             # Восстанавливаем объекты IP для корректной сортировки
             merged_list: List[Tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, str]] = []

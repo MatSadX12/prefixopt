@@ -268,26 +268,20 @@ def read_prefixes(file_path: Union[str, Path], show_progress: bool = True) -> It
 read_networks = read_prefixes
 
 
-def read_prefixes_with_comments(file_path: Path) -> List[Tuple[Union[IPv4Network, IPv6Network], str]]:
+def read_prefixes_with_comments(file_path: Path) -> Generator[Tuple[Union[IPv4Network, IPv6Network], str], None, None]:
     """
-    Специальная функция чтения с сохранением комментариев.
-
-    Используется только для команды merge --keep-comments.
-    В отличие от основного ридера, возвращает список, а не генератор,
-    так как логика слияния комментариев требует загрузки в память.
-
-    Args:
-        file_path: Путь к файлу.
-
-    Returns:
-        Список кортежей (Объект Сети, Строка Комментария).
+    Специальный генератор для чтения с комментариями.
+    Используется только в команде merge --keep-comments.
+    
+    Yields:
+        Tuple(ОбъектСети, "Текст Комментария")
     """
     path = Path(file_path)
     
+    # Защита
     if path.stat().st_size > MAX_FILE_SIZE_BYTES:
         raise ValueError(f"File too large ({path.stat().st_size/1024/1024:.2f} MB) for merge with comments.")
 
-    results = []
     line_count = 0
 
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -300,9 +294,11 @@ def read_prefixes_with_comments(file_path: Path) -> List[Tuple[Union[IPv4Network
             if not line_stripped:
                 continue
 
+            # Отделяем комментарий от данных
             if '#' in line:
                 content, comment_raw = line.split('#', 1)
                 cleaned_comment = comment_raw.strip()
+                # Стандартизируем вид комментария
                 comment = f"# {cleaned_comment}" if cleaned_comment else ""
             else:
                 content = line
@@ -310,5 +306,5 @@ def read_prefixes_with_comments(file_path: Path) -> List[Tuple[Union[IPv4Network
 
             prefixes = extract_prefixes_from_text(content)
             for p in prefixes:
-                results.append((p, comment))
-    return results
+                # Возвращаем пару: (IP, Коммент)
+                yield (p, comment)
