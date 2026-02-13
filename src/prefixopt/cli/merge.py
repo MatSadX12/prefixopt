@@ -161,7 +161,7 @@ def intersect(
         for net1 in prefixes1:
             for net2 in prefixes2:
                 # Пропускаем, если сети уже найдены как точные копии
-                if net1 in common_prefixes or net2 in common_prefixes:
+                if net1 in common_prefixes and net2 in common_prefixes:
                     continue
                 
                 # Оптимизация: overlaps работает быстро, subnet_of медленнее
