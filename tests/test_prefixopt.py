@@ -298,21 +298,33 @@ def test_cli_diff_semantic(tmp_path: Path) -> None:
 
 
 def test_cli_diff_show_unchanged(tmp_path: Path) -> None:
-    """Проверка флага --show-unchanged в diff."""
+    """
+    Проверка режима отображения unchanged через --mode.
+    """
     f_old = tmp_path / "old.txt"
     f_new = tmp_path / "new.txt"
     
+    # Общая сеть
     f_old.write_text("10.0.0.0/8", encoding="utf-8")
     f_new.write_text("10.0.0.0/8", encoding="utf-8")
     
-    # Без флага
+    # 1. По умолчанию (mode=changes)
     result = runner.invoke(app, ["diff", str(f_new), str(f_old)])
+    assert result.exit_code == 0
+    # Неизмененное скрыто
     assert "= 10.0.0.0/8" not in result.stdout
     
-    # С флагом
-    result_flag = runner.invoke(app, ["diff", str(f_new), str(f_old), "--show-unchanged"])
-    assert result_flag.exit_code == 0
-    assert "= 10.0.0.0/8" in result_flag.stdout
+    # 2. Режим --mode unchanged
+    # Должен показать только неизмененные
+    result_unchanged = runner.invoke(app, ["diff", str(f_new), str(f_old), "--mode", "unchanged"])
+    assert result_unchanged.exit_code == 0
+    assert "= 10.0.0.0/8" in result_unchanged.stdout
+    
+    # 3. Режим --mode all
+    # Должен показать всё (включая неизмененные)
+    result_all = runner.invoke(app, ["diff", str(f_new), str(f_old), "--mode", "all"])
+    assert result_all.exit_code == 0
+    assert "= 10.0.0.0/8" in result_all.stdout
 
 
 def test_cli_diff_summary(tmp_path: Path) -> None:
