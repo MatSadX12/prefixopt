@@ -161,11 +161,6 @@ def _parse_lines_generator(
     """
     Ядро чтения. Берет любой поток строк (файл или STDIN) и выдает объекты IP.
     
-    Args:
-        line_iterator: Итерируемый объект, выдающий строки (файл или stdin).
-        progress: Объект прогресс-бара (опционально).
-        task_id: ID задачи в прогресс-баре (опционально).
-        
     Yields:
         Объекты IPv4Network / IPv6Network.
     """
@@ -198,9 +193,46 @@ def _parse_lines_generator(
             try:
                 yield ipaddress.ip_network(line, strict=False)
             except ValueError:
-                # Молча пропускаем мусор, но можно раскомментировать для отладки
-                # print(f"Warning: Invalid line {line_num}", file=sys.stderr)
+                # Молча пропускаем мусор
                 pass
+
+
+def _parse_comments_generator(line_iterator: Iterator[str]) -> Generator[Tuple[Union[IPv4Network, IPv6Network], str], None, None]:
+    """
+    Внутреннее ядро для парсинга строк с комментариями.
+    Разделяет логику парсинга от логики открытия файлов.
+    
+    Args:
+        line_iterator: Поток строк (файл или STDIN).
+    
+    Yields:
+        Кортеж (IPNet, Comment).
+    """
+    for line_num, line in enumerate(line_iterator, 1):
+        if line_num > MAX_LINE_COUNT:
+            raise ValueError(f"Input exceeds safety limit of {MAX_LINE_COUNT} lines.")
+
+        line_stripped = line.strip()
+        if not line_stripped:
+            continue
+
+        # 1. Отделяем комментарий
+        if '#' in line:
+            content, comment_raw = line.split('#', 1)
+            cleaned_comment = comment_raw.strip()
+            # Форматируем комментарий, чтобы он всегда начинался с #
+            comment = f"# {cleaned_comment}" if cleaned_comment else ""
+        else:
+            content = line
+            comment = ""
+
+        # 2. Ищем IP в части до комментария
+        prefixes = extract_prefixes_from_text(content)
+        
+        # Если в одной строке несколько IP (например, "1.1.1.1, 2.2.2.2 # servers"),
+        # то комментарий привязывается ко всем найденным IP.
+        for p in prefixes:
+            yield (p, comment)
 
 
 # --- File Specific Readers ---
@@ -217,7 +249,6 @@ def _read_csv_generator(path: Path, progress: Progress, task_id: TaskID, column_
         reader = csv.DictReader(f)
         count = 0
         for row in reader:
-            # CSV специфичная логика подсчета (так как enumerate внутри не сработает на reader напрямую)
             count += 1
             if count > MAX_LINE_COUNT:
                 raise ValueError(f"CSV exceeds limit of {MAX_LINE_COUNT} rows.")
@@ -228,7 +259,6 @@ def _read_csv_generator(path: Path, progress: Progress, task_id: TaskID, column_
             if not prefix_text:
                 continue
 
-            # Используем тот же экстрактор
             extracted = extract_prefixes_from_text(prefix_text)
             if extracted:
                 for network in extracted:
@@ -241,17 +271,10 @@ def _read_csv_generator(path: Path, progress: Progress, task_id: TaskID, column_
 
 
 def _read_json_generator(path: Path, progress: Progress, task_id: TaskID, key_name: str = 'prefixes') -> Generator[Union[IPv4Network, IPv6Network], None, None]:
-    """
-    Потоковое чтение JSON с помощью ijson.
-    Использует бинарный режим ('rb') для максимальной производительности.
-    """
-    # Открываем в BINARY режиме ('rb')
+    """Потоковое чтение JSON."""
     with open(path, 'rb') as f:
-        # Оборачиваем файл в прокси для прогресс-бара
         wrapped_file = ProgressFileWrapper(f, progress, task_id)
-        
         parser_path = f"{key_name}.item"
-        
         count = 0
         try:
             for item in ijson.items(wrapped_file, parser_path):
@@ -259,9 +282,7 @@ def _read_json_generator(path: Path, progress: Progress, task_id: TaskID, key_na
                 if count > MAX_LINE_COUNT:
                     raise ValueError(f"JSON array exceeds the limit of {MAX_LINE_COUNT} items.")
                 
-                # ijson сам декодирует байты в строки/числа Python
                 prefix_text = str(item).strip()
-                
                 extracted = extract_prefixes_from_text(prefix_text)
                 if extracted:
                     for network in extracted:
@@ -271,7 +292,6 @@ def _read_json_generator(path: Path, progress: Progress, task_id: TaskID, key_na
                         yield ipaddress.ip_network(prefix_text, strict=False)
                     except ValueError:
                         print(f"Warning: Invalid prefix '{prefix_text}' in JSON", file=sys.stderr)
-                        
         except ijson.JSONError:
             pass
 
@@ -281,43 +301,32 @@ def _read_json_generator(path: Path, progress: Progress, task_id: TaskID, key_na
 def read_stream(stream: TextIO) -> Iterator[Union[IPv4Network, IPv6Network]]:
     """
     Чтение из стандартного ввода (STDIN / Pipe).
-    
-    Для потоков мы используем стратегию всеядного парсинга:
-    Мы не пытаемся угадать формат (JSON или CSV), а просто читаем поток
-    построчно и ищем в каждой строке IP-адреса с помощью Regex.
-    Это работает надежно для 99% случаев (логи, дампы, списки).
-    
-    Args:
-        stream: Объект потока (sys.stdin).
-        
-    Yields:
-        Объекты IP сетей.
     """
-    # Прогресс-бар для STDIN невозможен (не знаем длину), поэтому просто читаем
     yield from _parse_lines_generator(stream)
+
+
+def read_stream_with_comments(stream: TextIO) -> Generator[Tuple[Union[IPv4Network, IPv6Network], str], None, None]:
+    """
+    Чтение из STDIN с сохранением комментариев.
+    
+    Используется для команд optimize --keep-comments и merge, 
+    когда данные поступают через пайп.
+    """
+    yield from _parse_comments_generator(stream)
 
 
 def read_networks(file_path: Union[str, Path], show_progress: bool = True) -> Iterator[Union[IPv4Network, IPv6Network]]:
     """
-    Чтение из файла на диске. Автоматически выбирает парсер по расширению.
-    
-    Args:
-        file_path: Путь к файлу.
-        show_progress: Показывать ли бар (для больших файлов).
-        
-    Returns:
-        Итератор объектов сетей.
+    Чтение из файла на диске с автоматическим определением формата.
     """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    # Проверка размера файла
     file_size = path.stat().st_size
     if file_size > MAX_FILE_SIZE_BYTES:
         raise ValueError(f"File size exceeds safety limit ({MAX_FILE_SIZE_MB} MB).")
 
-    # Включаем прогресс-бар только если файл ощутимый (> 1MB)
     should_show = show_progress and file_size > 1024 * 1024
     extension = path.suffix.lower()
 
@@ -342,37 +351,11 @@ def read_networks(file_path: Union[str, Path], show_progress: bool = True) -> It
 
 def read_prefixes_with_comments(file_path: Path) -> Generator[Tuple[Union[IPv4Network, IPv6Network], str], None, None]:
     """
-    Специальный режим чтения для merge --keep-comments.
-    Сохраняет комментарии, привязанные к строкам.
-    
-    Returns:
-        Генератор кортежей (Сеть, Текст Комментария).
+    Чтение файла с сохранением комментариев.
     """
     path = Path(file_path)
-    
     if path.stat().st_size > MAX_FILE_SIZE_BYTES:
         raise ValueError(f"File too large for merge with comments.")
 
-    # Используем простую логику чтения, так как нам нужна привязка к строке
     with open(file_path, 'r', encoding='utf-8') as f:
-        for line_num, line in enumerate(f, 1):
-            if line_num > MAX_LINE_COUNT:
-                raise ValueError(f"File exceeds {MAX_LINE_COUNT} lines.")
-
-            line_stripped = line.strip()
-            if not line_stripped:
-                continue
-
-            # Парсинг комментария
-            if '#' in line:
-                content, comment_raw = line.split('#', 1)
-                cleaned_comment = comment_raw.strip()
-                comment = f"# {cleaned_comment}" if cleaned_comment else ""
-            else:
-                content = line
-                comment = ""
-
-            # Извлечение IP из контентной части
-            prefixes = extract_prefixes_from_text(content)
-            for p in prefixes:
-                yield (p, comment)
+        yield from _parse_comments_generator(f)

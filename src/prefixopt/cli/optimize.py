@@ -8,13 +8,19 @@
 import sys
 import ipaddress
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Generator, Union
 
 import typer
 
 # Локальные импорты
 from .common import OutputFormat, handle_output, console
-from ..data.file_reader import read_networks, read_stream, read_prefixes_with_comments
+# Импортируем новую функцию для чтения стрима с комментариями
+from ..data.file_reader import (
+    read_networks, 
+    read_stream, 
+    read_prefixes_with_comments, 
+    read_stream_with_comments
+)
 from ..core.pipeline import process_prefixes
 from ..core.ip_utils import normalize_prefix, IPNet
 
@@ -54,15 +60,25 @@ def optimize(
 
         # 2. Логика для режима с комментариями
         if keep_comments:
-            if not input_file:
-                console.print("[red]Error: --keep-comments requires an input file (STDIN not supported yet).[/red]")
+            # Определяем источник данных: Файл или STDIN
+            generator: Generator[Tuple[Union[ipaddress.IPv4Network, ipaddress.IPv6Network], str], None, None]
+            
+            if input_file:
+                # Читаем из файла
+                generator = read_prefixes_with_comments(input_file)
+            elif not sys.stdin.isatty():
+                # Читаем из пайпа
+                generator = read_stream_with_comments(sys.stdin)
+            else:
+                # Если ни файла, ни пайпа нет
+                console.print("[red]Error: --keep-comments requires an input file or piped data.[/red]")
                 sys.exit(1)
 
             # Словарь для дедупликации: "1.1.1.1/32" -> "Comment"
             unique_map: Dict[str, str] = {}
 
-            # Читаем файл, сохраняя привязку строк к комментариям
-            for net, comment in read_prefixes_with_comments(input_file):
+            # Итерируемся по генератору (ленивое чтение)
+            for net, comment in generator:
                 # Фильтрация по версии (если запрошено)
                 if ipv4_only and net.version != 4:
                     continue
@@ -71,21 +87,23 @@ def optimize(
 
                 ip_str = str(net)
                 
-                # Логика дедупликации:
-                # Если IP уже есть, но без коммента, а новый пришел с комментом -> обновляем.
+                # Логика дедупликации с сохранением комментариев:
+                # 1. Если IP встречаем впервые — сохраняем.
+                # 2. Если IP уже был, но без комментария, а текущий с комментарием — обновляем.
                 if ip_str not in unique_map:
                     unique_map[ip_str] = comment
                 elif not unique_map[ip_str] and comment:
                     unique_map[ip_str] = comment
 
             # Превращаем словарь обратно в список объектов для сортировки
-            # Нам нужно сортировать объекты, а не строки, чтобы 10.0.0.10 шло после 10.0.0.2
+            # Используем типизированный список кортежей
             result_list: List[Tuple[IPNet, str]] = []
             for ip_key, comm in unique_map.items():
                 net_obj = ipaddress.ip_network(ip_key, strict=False)
                 result_list.append((net_obj, comm))
 
             # Сортировка Broadest First (Версия -> IP -> Маска)
+            # Это позволяет получить упорядоченный список, как в ACL
             result_list.sort(key=lambda item: (
                 item[0].version,
                 int(item[0].network_address),
@@ -102,7 +120,7 @@ def optimize(
 
             content = "\n".join(lines) + "\n"
 
-            # Вывод результата
+            # Вывод результата (файл или консоль)
             if output_file:
                 with open(output_file, 'w', encoding='utf-8') as f:
                     f.write(content)
@@ -121,7 +139,7 @@ def optimize(
                 console.print("[red]Error: No input provided. Give me a file or pipe data via STDIN.[/red]")
                 sys.exit(1)
 
-            # Запускаем полный пайплайн
+            # Запускаем полный пайплайн (Сортировка -> Nested -> Aggregate)
             processed_prefixes = process_prefixes(
                 prefixes,
                 sort=True,
@@ -151,7 +169,7 @@ def add(
     keep_comments: bool = typer.Option(False, "--keep-comments", help="Preserve comments. Disables aggregation.")
 ) -> None:
     """
-    Adds a new prefix to the file and optimizes the list.
+    Adds a new prefix to the file and optimizes the entire list.
     """
     try:
         # Валидация входного префикса
@@ -161,13 +179,13 @@ def add(
             console.print(f"[red]Error: Invalid prefix {new_prefix}[/red]")
             sys.exit(1)
 
-        # Режим с комментариями
+        # Режим с сохранением комментариев
         if keep_comments:
             if format == OutputFormat.csv:
                 console.print("[red]Error: Cannot use --keep-comments with CSV format.[/red]")
                 sys.exit(1)
 
-            # Читаем существующие данные
+            # Читаем существующий файл с комментариями
             unique_map: Dict[str, str] = {}
             for net, comment in read_prefixes_with_comments(input_file):
                 unique_map[str(net)] = comment
@@ -178,7 +196,7 @@ def add(
             if new_ip_str in unique_map:
                 console.print(f"[yellow]Prefix {new_ip_str} already exists in the list.[/yellow]")
             else:
-                # Добавляем с пометкой, что это новый IP
+                # Добавляем с авто-комментарием
                 unique_map[new_ip_str] = f"# Added manually: {new_prefix}"
             
             # Конвертируем обратно и сортируем

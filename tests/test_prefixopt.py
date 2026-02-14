@@ -611,3 +611,34 @@ def test_json_garbage_values(tmp_path):
     assert len(results) == 2
     assert ipaddress.ip_network("1.1.1.1/32") in results
     assert ipaddress.ip_network("10.0.0.1/32") in results
+
+
+def test_cli_optimize_keep_comments_stdin():
+    """
+    Проверяет работу флага --keep-comments при передаче данных через PIPE (STDIN).
+    
+    Сценарий:
+    echo "1.1.1.1 # Comment" | prefixopt optimize --keep-comments
+    """
+    # Эмулируем ввод: две смежные сети с разными комментариями.
+    # В обычном режиме они бы склеились в /31.
+    input_data = "192.168.1.10 # Web Server\n192.168.1.11 # DB Server"
+
+    # Запускаем команду без указания input_file, но с input=...
+    result = runner.invoke(app, ["optimize", "--keep-comments"], input=input_data)
+
+    assert result.exit_code == 0
+    
+    # 1. Проверяем сохранение комментариев
+    assert "192.168.1.10/32 # Web Server" in result.stdout
+    assert "192.168.1.11/32 # DB Server" in result.stdout
+    
+    # 2. Проверяем отключение агрегации
+    # Если бы агрегация сработала, мы бы увидели 192.168.1.10/31
+    assert "/31" not in result.stdout
+    
+    # 3. Проверяем сортировку (чисто для порядка)
+    # .10 должно идти перед .11 в выводе
+    pos_web = result.stdout.find("192.168.1.10")
+    pos_db = result.stdout.find("192.168.1.11")
+    assert pos_web < pos_db
