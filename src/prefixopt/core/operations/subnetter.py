@@ -5,7 +5,7 @@ from ipaddress import IPv4Network, IPv6Network
 
 def split_network(network: Union[IPv4Network, IPv6Network], target_length: int, max_subnets: int = 500000) -> List[Union[IPv4Network, IPv6Network]]:
     """
-    Excludes the specified networks from the input list.
+    Splits the network into subnets.
 
     Команда принимает на вход цель для исключения и исходный файл.
     Если исключаемая сеть перекрывается с сетями из списка, исходные сети
