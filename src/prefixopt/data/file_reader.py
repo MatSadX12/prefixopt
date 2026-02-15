@@ -341,9 +341,7 @@ def read_networks(file_path: Union[str, Path], show_progress: bool = True) -> It
         
         task_id = progress.add_task(f"Reading {path.name}", total=file_size)
 
-        if extension == '.csv':
-            yield from _read_csv_generator(path, progress, task_id)
-        elif extension == '.json':
+        if extension == '.json':
             yield from _read_json_generator(path, progress, task_id)
         else:
             yield from _read_txt_generator(path, progress, task_id)

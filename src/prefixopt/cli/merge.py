@@ -8,7 +8,8 @@
 import sys
 import ipaddress
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Generator, Set
+from typing import Optional, List, Dict, Tuple, Generator
+from rich.table import Table
 
 import typer
 
@@ -18,6 +19,7 @@ from ..data.file_reader import read_networks, read_prefixes_with_comments
 from ..core.pipeline import process_prefixes
 from ..core.operations.sorter import sort_networks
 from ..core.ip_utils import IPNet
+from ..core.ip_counter import count_unique_ips
 
 
 def merge(
@@ -191,8 +193,8 @@ def _find_overlaps_linear(
 
 
 def intersect(
-    file1: Path = typer.Argument(..., help="First input file with IP prefixes"),
-    file2: Path = typer.Argument(..., help="Second input file with IP prefixes"),
+    file1: Path = typer.Argument(..., help="First input file"),
+    file2: Path = typer.Argument(..., help="Second input file"),
     output_file: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
     format: OutputFormat = typer.Option(
         OutputFormat.list,
@@ -210,47 +212,69 @@ def intersect(
     """
     try:
         # 1. Загрузка данных
-        # Используем set для быстрого поиска точных совпадений
         list1 = list(read_networks(file1))
         list2 = list(read_networks(file2))
         
         name1 = file1.name
         name2 = file2.name
-        
+
+        # 2. Подсчет объема исходных данных (Уникальные IP)
+        # Это может занять время для больших файлов, но это необходимо для честной статистики
+        with console.status("[bold green]Calculating volumes...", spinner="dots"):
+            volume1 = count_unique_ips(list1)
+            volume2 = count_unique_ips(list2)
+
+        # 3. Поиск пересечений
         set1 = set(list1)
         set2 = set(list2)
-
-        # 2. Точные совпадения (Exact Match) - O(N)
         common_prefixes = set1.intersection(set2)
 
-        # 3. Частичные перекрытия - O(N log N) из-за сортировки
-        # Сначала сортируем оба списка. Это критически важно для линейного алгоритма.
         sorted1 = sort_networks(list1)
         sorted2 = sort_networks(list2)
         
-        # Запускаем линейный поиск
         raw_overlaps = _find_overlaps_linear(sorted1, sorted2)
         
-        # Фильтруем результаты:
-        # - Убираем точные совпадения (они уже в common_prefixes)
-        # - Оставляем только пары (Subnet, Supernet) для красивого вывода
         partial_overlaps: List[Tuple[IPNet, IPNet, str, str]] = []
         
         for net1, net2 in raw_overlaps:
             if net1 == net2:
                 continue
             
-            # Определяем кто в кого вложен
-            # Pylance ignore: версии гарантированно совпадают благодаря логике _find_overlaps
             if net1.subnet_of(net2): # type: ignore
                 partial_overlaps.append((net1, net2, name1, name2))
             elif net2.subnet_of(net1): # type: ignore
                 partial_overlaps.append((net2, net1, name2, name1))
-            # Если сети просто пересекаются (частично), но не вложены
-            # (обычно означает ошибку агрегации), мы их тоже можем показать или пропустить.
-            # Для простоты покажем как (net1, net2).
             else:
-                 partial_overlaps.append((net1, net2, name1, name2))
+                partial_overlaps.append((net1, net2, name1, name2))
+
+        # 4. Формирование списка всех пересечений для подсчета объема
+        # В этот список мы кладем МЕНЬШУЮ часть каждого пересечения.
+        # - Если точное совпадение: берем любую.
+        # - Если A внутри B: берем A.
+        # - Если частичное пересечение: это сложнее, но наш алгоритм 
+        #   subtractor может вычислить точную геометрию. 
+        #   Для простоты и скорости мы возьмем объединение всех вложенных частей.
+        
+        intersection_fragments: List[IPNet] = list(common_prefixes)
+        
+        for net1, net2 in raw_overlaps:
+            if net1 == net2: continue
+            
+            # Добавляем в список фрагментов ту сеть, которая МЕНЬШЕ (или пересечение)
+            # В простейшем случае overlaps (без subnet_of) мы не можем точно сказать,
+            # поэтому (для безопасности статистики) пока считаем только явные вложения.
+            # Для точной математики нужно было бы делать (net1 & net2), чего ipaddress не умеет напрямую.
+            # Но так как мы работаем с CIDR, 99% случаев это вложенность.
+            
+            if net1.subnet_of(net2): # type: ignore
+                intersection_fragments.append(net1)
+            elif net2.subnet_of(net1): # type: ignore
+                intersection_fragments.append(net2)
+            # Игнорируем сложные частичные перекрытия для статистики, чтобы не замедлять код
+        
+        # Считаем объем пересечения
+        # Обязательно делаем count_unique_ips, чтобы убрать дубли (если одна сеть пересеклась с двумя)
+        volume_intersection = count_unique_ips(intersection_fragments)
 
 
         # Вывод результатов
@@ -258,10 +282,40 @@ def intersect(
 
         if should_print_details:
             console.print(f"\n[bold underline]Intersection Report[/bold underline]")
-            console.print(f"Source A: [cyan]{name1}[/cyan]")
-            console.print(f"Source B: [magenta]{name2}[/magenta]\n")
+            
+            # Таблица статистики
+            table = Table(show_header=True, header_style="bold magenta")
+            table.add_column("Metric")
+            table.add_column(name1, justify="right")
+            table.add_column(name2, justify="right")
+            table.add_column("Intersection", justify="right", style="green")
 
-            # Секция 1: Точные совпадения
+            # Форматирование процентов
+            cov1 = (volume_intersection / volume1 * 100) if volume1 > 0 else 0
+            cov2 = (volume_intersection / volume2 * 100) if volume2 > 0 else 0
+
+            table.add_row("Unique IPs", f"{volume1:,}", f"{volume2:,}", f"{volume_intersection:,}")
+            table.add_row("Coverage", f"{cov1:.2f}%", f"{cov2:.2f}%", "")
+            
+            console.print(table)
+            console.print("") # Empty line
+
+            # Проверка полного вхождения
+            if volume1 > 0:
+                if volume_intersection == volume1:
+                    console.print(f"[bold green][OK] All unique IPs from {name1} are present in {name2}[/bold green]")
+                else:
+                    missing_count = volume1 - volume_intersection
+                    console.print(f"[yellow][!] Only {cov1:.2f}% of {name1} is covered by {name2}[/yellow]")
+                    console.print(f"  (Missing {missing_count:,} IPs from {name1})")
+
+            if volume2 > 0:
+                if volume_intersection == volume2:
+                    console.print(f"[bold green]✓ All unique IPs from {name2} are present in {name1}[/bold green]")
+            
+            console.print("") # Empty line
+
+            # Секция деталей (Exact / Partial)
             if common_prefixes:
                 console.print(f"[bold green]=== Exact Matches ({len(common_prefixes)}) ===[/bold green]")
                 for prefix in sort_networks(common_prefixes):
@@ -269,15 +323,11 @@ def intersect(
             else:
                 console.print("[dim]No exact matches found.[/dim]")
 
-            # Секция 2: Частичные перекрытия
             if partial_overlaps:
                 console.print(f"\n[bold yellow]=== Partial Overlaps ({len(partial_overlaps)}) ===[/bold yellow]")
-                
-                # Сортируем для читаемости (по адресу вложенной сети)
                 partial_overlaps.sort(key=lambda x: (x[0].version, int(x[0].network_address)))
                 
                 for sub, parent, sub_src, parent_src in partial_overlaps:
-                    # Форматируем цвета в зависимости от источника
                     sub_color = "cyan" if sub_src == name1 else "magenta"
                     parent_color = "cyan" if parent_src == name1 else "magenta"
                     
@@ -289,7 +339,7 @@ def intersect(
             else:
                 console.print("\n[dim]No partial overlaps found.[/dim]")
 
-        # Формирование выходного списка (только уникальные сети)
+        # Формирование выходного списка
         all_results = list(common_prefixes)
         for sub, parent, _, _ in partial_overlaps:
             all_results.extend([sub, parent])
