@@ -78,6 +78,39 @@ def parse_ipv6(text: str) -> List[str]:
     return [match.strip() for match in matches]
 
 
+def parse_ipv4_ranges(text: str) -> List[IPv4Network]:
+    """
+    Ищет диапазоны IP (например, "192.168.1.1 - 192.168.1.10") 
+    и преобразует их в список CIDR подсетей.
+    """
+    # Regex ищет: IP <пробелы> - <пробелы> IP
+    # Группы захвата: (Start IP), (End IP)
+    range_pattern = r'((?:\d{1,3}\.){3}\d{1,3})\s*-\s*((?:\d{1,3}\.){3}\d{1,3})'
+    matches = re.findall(range_pattern, text)
+    
+    cidr_results = []
+    
+    for start_str, end_str in matches:
+        try:
+            start_ip = ipaddress.IPv4Address(start_str)
+            end_ip = ipaddress.IPv4Address(end_str)
+            
+            # ipaddress требует, чтобы start <= end
+            if start_ip > end_ip:
+                # Если перепутаны местами, меняем
+                start_ip, end_ip = end_ip, start_ip
+            
+            # summarize_address_range возвращает итератор сетей, покрывающих диапазон
+            subnets = ipaddress.summarize_address_range(start_ip, end_ip)
+            cidr_results.extend(subnets)
+            
+        except ValueError:
+            # Если IP некорректен (напр. 999.999.999.999), пропускаем
+            pass
+            
+    return cidr_results
+
+
 def normalize_single_ip(candidate: str) -> Union[IPv4Network, IPv6Network, None]:
     """
     Превращает грязную строку в чистый объект IP-сети.
@@ -138,18 +171,30 @@ def extract_prefixes_from_text(text: str) -> List[Union[IPv4Network, IPv6Network
     Вытаскивает все IP-адреса из строки, игнорируя текст вокруг.
     Это основа всеядности утилиты.
     """
-    prefixes = []
+    prefixes: List[Union[IPv4Network, IPv6Network]] = []
+
+    # 1. Сначала ищем диапазоны (1.1.1.1 - 1.1.1.5)
+    # Это важно сделать, чтобы получить правильные CIDR.
+    # Найденные здесь сети уже являются объектами, нормализация не нужна.
+    ranges = parse_ipv4_ranges(text)
+    prefixes.extend(ranges)
+
+    # 2. Ищем обычные IP и CIDR
     all_candidates = parse_ipv4(text) + parse_ipv6(text)
 
     for candidate in all_candidates:
         if not candidate:
             continue
+        # Нормализация превратит строки в объекты
         network = normalize_single_ip(candidate)
         if network is not None:
             prefixes.append(network)
 
-    return prefixes
-
+    # Примечание: В списке prefixes могут оказаться дубликаты.
+    # Например, если в тексте было "10.0.0.1 - 10.0.0.1", range вернет 10.0.0.1/32,
+    # и parse_ipv4 тоже вернет 10.0.0.1/32.
+    # Это НОРМАЛЬНО. Дубликаты будут удалены на этапе оптимизации (process_prefixes).
+    return prefixes 
 
 # --- Универсальный читатель ---
 

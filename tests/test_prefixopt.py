@@ -848,3 +848,34 @@ def test_integration_pipeline_merge_diff():
     
     # Unchanged: .1
     assert "10.0.0.1/32" in unchanged_str
+
+
+def test_parsing_ip_ranges():
+    """
+    Проверяет парсинг диапазонов IP (Range -> CIDR).
+    Input: "192.168.1.0 - 192.168.1.3"
+    Expected: "192.168.1.0/30"
+    """
+    from prefixopt.api import load
+    
+    # Случай 1: Идеальный CIDR
+    input_data = "192.168.1.0 - 192.168.1.3"
+    result = list(load(input_data))
+    # После optimize дубли уйдут, но load вернет всё.
+    # Главное, чтобы там была /30.
+    cidr_strs = [str(r) for r in result]
+    assert "192.168.1.0/30" in cidr_strs
+
+    # Случай 2: "Кривой" диапазон
+    # .1 - .2 (не выровнен по границе /31, т.к. /31 это .0-.1 или .2-.3)
+    # Должен разбить на два /32
+    input_data_2 = "10.0.0.1 - 10.0.0.2"
+    result_2 = list(load(input_data_2))
+    cidr_strs_2 = [str(r) for r in result_2]
+    
+    assert "10.0.0.1/32" in cidr_strs_2
+    assert "10.0.0.2/32" in cidr_strs_2
+    
+    # Убеждаемся, что не создалась инвалидная /31
+    for r in cidr_strs_2:
+        assert "/31" not in r
